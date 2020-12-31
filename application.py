@@ -35,6 +35,31 @@ Session(app)
 # Configure CS50 Library to use SQLite database
 db = SQL("sqlite:///finance.db")
 
+# Create table for user balance
+db.execute("""
+CREATE TABLE IF NOT EXISTS 'balances' (
+    'id' INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    'user_id' INTEGER NOT NULL,
+    'symbol' TEXT NOT NULL,
+    'shares' INTEGER NOT NULL,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+    )
+    """)
+db.execute("CREATE UNIQUE INDEX IF NOT EXISTS unique_balances_user_id_symbol ON balances (user_id, symbol)")    
+
+# Create table of user history
+db.execute("""
+CREATE TABLE IF NOT EXISTS 'history' (
+    'id' INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    'user_id' INTEGER, 'symbol' TEXT,
+    'shares' INTEGER NOT NULL,
+    'price' NUMERIC NOT NULL,
+    'created_at' DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(user_id) REFERENCES users(id)    
+    )
+    """)
+db.execute("CREATE UNIQUE INDEX IF NOT EXISTS index_history_user_id ON balances (user_id, symbol)")    
+
 # Make sure API key is set
 if not os.environ.get("API_KEY"):
     raise RuntimeError("API_KEY not set")
@@ -51,7 +76,49 @@ def index():
 @login_required
 def buy():
     """Buy shares of stock"""
-    return apology("TODO")
+    if request.method == "POST":
+        symbol = request.form.get("symbol")
+        shares = int(request.form.get("shares"))
+
+        if shares < 1:
+            return apology("must provide a positive shares quantity", 400)
+            
+
+        if not symbol:
+            return apology("must provide a stock symbol", 400)  
+
+        symbol = symbol.upper()
+        stock = lookup(symbol)
+
+        if not stock:
+            return apology(f"invalid stock '{symbol}'", 400)
+
+        total = stock["price"] * shares
+
+        users = db.execute("SELECT * FROM users WHERE id = ?", session["user_id"])
+        user = users[0]
+        if user["cash"] < total:
+            return apology(f"insufficiente balance", 400)      
+
+        rows = db.execute("SELECT * FROM balances WHERE user_id = ? AND symbol = ?", user["id"], symbol)
+        if len(rows) < 1:
+            db.execute("INSERT INTO balances (user_id, symbol, shares) VALUES (?, ?, ?)", user["id"], symbol, shares)
+        else:
+            balance = rows[0]
+            balance["shares"] += shares
+            db.execute("UPDATE balances SET shares = ? WHERE id = ?", balance["shares"], balance["id"])
+
+
+        db.execute("INSERT INTO history (user_id, symbol, shares, price) VALUES (?, ?, ?, ?)", user["id"], symbol, shares, stock["price"])
+
+        updated_cash = user["cash"] - total
+        db.execute("UPDATE users SET cash = ? WHERE id = ?", updated_cash, user["id"])
+           
+        flash(f"bought'{shares}' shares of '{symbol}' successfully", "success")        
+        return redirect("/")
+
+    else:     
+        return render_template("buy.html")   
 
 
 @app.route("/history")
