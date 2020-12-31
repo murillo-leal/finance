@@ -209,8 +209,7 @@ def buy():
         shares = int(request.form.get("shares"))
 
         if shares < 1:
-            return apology("must provide a positive shares quantity", 400)
-            
+            return apology("must provide a positive shares quantity", 400)            
 
         if not symbol:
             return apology("must provide a stock symbol", 400)  
@@ -252,7 +251,48 @@ def buy():
 @login_required
 def sell():
     """Sell shares of stock"""
-    return apology("TODO")
+    if request.method == "POST":
+        symbol = request.form.get("symbol")
+        shares = int(request.form.get("shares"))
+
+        if shares < 1:
+           return apology("must provide a positive shares quantity", 400)            
+
+        if not symbol:
+            return apology("must provide a stock symbol", 400)  
+
+        symbol = symbol.upper()
+
+        balances = db.execute("SELECT * FROM balances WHERE user_id = ? AND symbol = ?", session["user_id"], symbol)
+        if len(balances) < 1:
+            return apology(f"Insufficiente shares for symbol '{symbol}'", 400)
+
+        balance = balances[0]
+        if shares > balance["shares"]:
+            return apology(f"Insufficiente shares for symbol '{symbol}'", 400)
+
+        stock = lookup(symbol)
+        if not stock:
+            return apology(f"error retrieving stock '{symbol}'", 400)
+
+        users = db.execute("SELECT * FROM users WHERE id = ?", session["user_id"])
+        user = users[0] 
+
+        balance["shares"] -= shares
+        db.execute("UPDATE balances SET shares = ? WHERE id = ?", balance["shares"],balance["id"])
+
+        db.execute("INSERT INTO history (user_id, symbol, shares, price) VALUES (?, ?, ?, ?)", user["id"], symbol, shares * -1, stock["price"])
+
+        total = stock["price"] * shares        
+        updated_cash = user["cash"] + total
+        db.execute("UPDATE users SET cash = ? WHERE id = ?", updated_cash, user["id"])
+           
+        flash(f"sold'{shares}' shares of '{symbol}' successfully", "success")        
+        return redirect("/")
+
+    else:     
+        stocks = db.execute("SELECT * FROM balances WHERE user_id = ? AND shares > 0", session["user_id"])
+        return render_template("sell.html", stocks=stocks)
 
 
 def errorhandler(e):
