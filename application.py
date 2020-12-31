@@ -69,63 +69,32 @@ if not os.environ.get("API_KEY"):
 @login_required
 def index():
     """Show portfolio of stocks"""
-    return apology("TODO")
+
+    users = db.execute("SELECT * FROM users WHERE id = ?", session["user_id"])
+    user = users[0]
+
+    rows = db.execute("SELECT * FROM balances WHERE user_id = ?", user["id"])
+    balances = []    
+    for row in rows:
+        balance = row
+        stock = lookup(balance["symbol"])
+        balance["price"] = stock["price"]
+        balance["total"] = stock["price"] * balance["shares"]
+        balance["name"] = stock["name"]
+        balances.append(balance)
+
+    return render_template("index.html", cash=user["cash"], stocks=balances, user=user)
 
 
-@app.route("/buy", methods=["GET", "POST"])
-@login_required
-def buy():
-    """Buy shares of stock"""
-    if request.method == "POST":
-        symbol = request.form.get("symbol")
-        shares = int(request.form.get("shares"))
-
-        if shares < 1:
-            return apology("must provide a positive shares quantity", 400)
-            
-
-        if not symbol:
-            return apology("must provide a stock symbol", 400)  
-
-        symbol = symbol.upper()
-        stock = lookup(symbol)
-
-        if not stock:
-            return apology(f"invalid stock '{symbol}'", 400)
-
-        total = stock["price"] * shares
-
-        users = db.execute("SELECT * FROM users WHERE id = ?", session["user_id"])
-        user = users[0]
-        if user["cash"] < total:
-            return apology(f"insufficiente balance", 400)      
-
-        rows = db.execute("SELECT * FROM balances WHERE user_id = ? AND symbol = ?", user["id"], symbol)
-        if len(rows) < 1:
-            db.execute("INSERT INTO balances (user_id, symbol, shares) VALUES (?, ?, ?)", user["id"], symbol, shares)
-        else:
-            balance = rows[0]
-            balance["shares"] += shares
-            db.execute("UPDATE balances SET shares = ? WHERE id = ?", balance["shares"], balance["id"])
-
-
-        db.execute("INSERT INTO history (user_id, symbol, shares, price) VALUES (?, ?, ?, ?)", user["id"], symbol, shares, stock["price"])
-
-        updated_cash = user["cash"] - total
-        db.execute("UPDATE users SET cash = ? WHERE id = ?", updated_cash, user["id"])
-           
-        flash(f"bought'{shares}' shares of '{symbol}' successfully", "success")        
-        return redirect("/")
-
-    else:     
-        return render_template("buy.html")   
+   
 
 
 @app.route("/history")
 @login_required
 def history():
     """Show history of transactions"""
-    return apology("TODO")
+    history = db.execute("SELECT * FROM history WHERE user_id = ?", session["user_id"])    
+    return render_template("history.html", history=history)
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -196,9 +165,7 @@ def quote():
         return render_template("quoted.html", stock=stock)
 
     else:     
-        return render_template("quote.html")   
-
-    
+        return render_template("quote.html")     
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -233,6 +200,53 @@ def register():
     else:
         return render_template("register.html")
 
+@app.route("/buy", methods=["GET", "POST"])
+@login_required
+def buy():
+    """Buy shares of stock"""
+    if request.method == "POST":
+        symbol = request.form.get("symbol")
+        shares = int(request.form.get("shares"))
+
+        if shares < 1:
+            return apology("must provide a positive shares quantity", 400)
+            
+
+        if not symbol:
+            return apology("must provide a stock symbol", 400)  
+
+        symbol = symbol.upper()
+        stock = lookup(symbol)
+
+        if not stock:
+            return apology(f"invalid stock '{symbol}'", 400)
+
+        total = stock["price"] * shares
+
+        users = db.execute("SELECT * FROM users WHERE id = ?", session["user_id"])
+        user = users[0]
+        if user["cash"] < total:
+            return apology(f"insufficiente balance", 400)      
+
+        rows = db.execute("SELECT * FROM balances WHERE user_id = ? AND symbol = ?", user["id"], symbol)
+        if len(rows) < 1:
+            db.execute("INSERT INTO balances (user_id, symbol, shares) VALUES (?, ?, ?)", user["id"], symbol, shares)
+        else:
+            balance = rows[0]
+            balance["shares"] += shares
+            db.execute("UPDATE balances SET shares = ? WHERE id = ?", balance["shares"], balance["id"])
+
+
+        db.execute("INSERT INTO history (user_id, symbol, shares, price) VALUES (?, ?, ?, ?)", user["id"], symbol, shares, stock["price"])
+
+        updated_cash = user["cash"] - total
+        db.execute("UPDATE users SET cash = ? WHERE id = ?", updated_cash, user["id"])
+           
+        flash(f"bought'{shares}' shares of '{symbol}' successfully", "success")        
+        return redirect("/")
+
+    else:     
+        return render_template("buy.html")
 
 @app.route("/sell", methods=["GET", "POST"])
 @login_required

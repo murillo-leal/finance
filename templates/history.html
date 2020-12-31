@@ -1,0 +1,41 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    History
+{% endblock %}
+
+{% block main %}
+<h2>History</h2>
+
+<table class = "table">
+    <thead>
+        <tr>
+            <th>Date Time</th>
+            <th>Stock</th>
+            <th>Action</th>
+            <th>Price</th>
+            <th>Shares</th>
+            <th>Total</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in history %}
+        <tr>
+            <td>{{ item.created_at }}</td>
+            <td>{{ item.symbol }}</td>
+            <td>
+                {% if item.price > 0 %}
+                    <span class="badge badge-success">BUY</span>
+                {% else %}
+                    <span class="badge badge-danger">SELL</span>    
+                {% endif %}    
+            </td>
+            <td>{{ item.price | usd }}</td>
+            <td>{{ item.shares }}</td>
+            <td>{{ (item.price * item.shares) | usd}}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+
+</table>
+{% endblock %}
